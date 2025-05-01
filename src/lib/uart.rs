@@ -40,3 +40,8 @@ pub fn print_integer(num: u64) {
         print_char(buffer[i] as char);
     }
 }
+
+pub fn print_integerln(num: u64) {
+    print_integer(num);
+    print_char('\n');
+}
