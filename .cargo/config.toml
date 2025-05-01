@@ -2,7 +2,7 @@
 target = "riscv64gc-unknown-none-elf"
 
 [target.riscv64gc-unknown-none-elf]
-rustflags = ["-C", "link-arg=-Tlinker.ld"]
+rustflags = ["-Clink-arg=-Tlinker.ld", "-Cllvm-args=-align-all-functions=2"]
 
 [alias]
 objdump-debug = "objdump --bin riscvos -- -d"
@@ -10,3 +10,4 @@ objdump-release = "objdump --bin riscvos --release -- -d"
 # TODO: fix command
 # run-qemu = "qemu-system-riscv64 -nographic -smp 4 -machine virt -bios none -kernel target/riscv64gc-unknown-none-elf/debug/riscvos"
 # run-qemu-gdb = "qemu-system-riscv64 -nographic -smp 4 -machine virt -bios none -kernel target/riscv64gc-unknown-none-elf/debug/riscvos"
+# qemu-system-riscv64 -nographic -smp 4 -machine virt -bios none -kernel target/riscv64gc-unknown-none-elf/debug/riscvos -S -gdb tcp::61234
