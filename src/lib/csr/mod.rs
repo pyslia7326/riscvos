@@ -54,28 +54,28 @@ define_csr!(sip);
 define_csr!(pmpaddr0);
 define_csr!(pmpcfg0);
 
-pub const MSTATUS_MIE: u64 = 1 << 3;
-pub const MSTATUS_MPIE: u64 = 1 << 7;
-pub const MSTATUS_MPP: u64 = 1 << 11;
-pub const MSTATUS_MPP_MASK: u64 = 0b11 << 11;
+pub const MSTATUS_MIE: u8 = 3;
+pub const MSTATUS_MPIE: u8 = 7;
+pub const MSTATUS_MPP: u8 = 11;
+pub const MSTATUS_MPP_MASK: u64 = 0b11 << MSTATUS_MPP;
 
-pub const MIE_MSIE: u64 = 1 << 3;
-pub const MIE_MTIE: u64 = 1 << 7;
-pub const MIE_MEIE: u64 = 1 << 11;
+pub const MIE_MSIE: u8 = 3;
+pub const MIE_MTIE: u8 = 7;
+pub const MIE_MEIE: u8 = 11;
 
-pub const MIP_MSIP: u64 = 1 << 3;
-pub const MIP_MTIP: u64 = 1 << 7;
-pub const MIP_MEIP: u64 = 1 << 11;
+pub const MIP_MSIP: u8 = 3;
+pub const MIP_MTIP: u8 = 7;
+pub const MIP_MEIP: u8 = 11;
 
-pub const SSTATUS_SIE: u64 = 1 << 1;
-pub const SSTATUS_SPIE: u64 = 1 << 5;
-pub const SSTATUS_SPP: u64 = 1 << 8;
-pub const SSTATUS_SPP_MASK: u64 = 0b1 << 8;
+pub const SSTATUS_SIE: u8 = 1;
+pub const SSTATUS_SPIE: u8 = 5;
+pub const SSTATUS_SPP: u8 = 8;
+pub const SSTATUS_SPP_MASK: u64 = 0b1 << SSTATUS_SPP;
 
-pub const SIE_SSIE: u64 = 1 << 1;
-pub const SIE_STIE: u64 = 1 << 5;
-pub const SIE_SEIE: u64 = 1 << 9;
+pub const SIE_SSIE: u8 = 1;
+pub const SIE_STIE: u8 = 5;
+pub const SIE_SEIE: u8 = 9;
 
-pub const SIP_SSIP: u64 = 1 << 1;
-pub const SIP_STIP: u64 = 1 << 5;
-pub const SIP_SEIP: u64 = 1 << 9;
+pub const SIP_SSIP: u8 = 1;
+pub const SIP_STIP: u8 = 5;
+pub const SIP_SEIP: u8 = 9;
