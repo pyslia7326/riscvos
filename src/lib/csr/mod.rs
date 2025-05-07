@@ -1,3 +1,4 @@
+use crate::riscv::PrivilegeMode;
 use core::arch::asm;
 use paste::paste;
 
@@ -31,6 +32,7 @@ macro_rules! define_csr {
     };
 }
 
+define_csr!(mhartid);
 define_csr!(mstatus);
 define_csr!(medeleg);
 define_csr!(mideleg);
@@ -79,3 +81,11 @@ pub const SIE_SEIE: u8 = 9;
 pub const SIP_SSIP: u8 = 1;
 pub const SIP_STIP: u8 = 5;
 pub const SIP_SEIP: u8 = 9;
+
+pub fn mstatus_set_pp(pp: PrivilegeMode) {
+    write_mstatus((read_mstatus() & !MSTATUS_MPP_MASK) | (pp.code() << MSTATUS_MPP))
+}
+
+pub fn sstatus_set_pp(pp: PrivilegeMode) {
+    write_sstatus((read_sstatus() & !SSTATUS_SPP_MASK) | (pp.code() << SSTATUS_SPP))
+}
