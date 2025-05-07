@@ -10,7 +10,15 @@ static mut TASKS: [TaskStruct; MAX_TASK_NUM] = [TaskStruct::new(); MAX_TASK_NUM]
 static mut TASK_STACKS: [Stack; MAX_TASK_NUM] = [Stack::new(); MAX_TASK_NUM];
 static mut IDLE_TASK: [TaskStruct; 1] = [TaskStruct::new(); 1];
 static mut IDLE_STACK: [Stack; 1] = [Stack::new(); 1];
+static mut KERNEL_TASK: [TaskStruct; 1] = [TaskStruct::new(); 1];
 static mut CURRENT_TASK: usize = 0;
+
+pub fn get_kernel_task_struct() -> &'static mut TaskStruct {
+    unsafe {
+        let task_struct = &mut KERNEL_TASK[0];
+        task_struct
+    }
+}
 
 pub fn get_current_task() -> usize {
     unsafe { CURRENT_TASK }
