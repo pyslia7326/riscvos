@@ -1,3 +1,19 @@
+pub enum PrivilegeMode {
+    User,
+    Supervisor,
+    Machine,
+}
+
+impl PrivilegeMode {
+    pub fn code(&self) -> u64 {
+        match self {
+            PrivilegeMode::User => 0b00,
+            PrivilegeMode::Supervisor => 0b01,
+            PrivilegeMode::Machine => 0b11,
+        }
+    }
+}
+
 #[macro_export]
 macro_rules! mret {
     () => {
