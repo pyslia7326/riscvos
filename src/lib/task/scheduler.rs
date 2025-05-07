@@ -1,4 +1,5 @@
 use crate::csr;
+use crate::riscv::PrivilegeMode;
 use crate::task::MAX_TASK_NUM;
 use crate::task::Stack;
 use crate::task::TaskState;
@@ -53,7 +54,7 @@ pub fn create_task(task: fn()) -> Option<&'static TaskStruct> {
             task_struct.id = Some(i as u64);
             task_struct.stack_ptr = get_stack_ptr(i);
             task_struct.sp = get_stack_ptr(i) as u64;
-            task_struct.sepc = task as u64;
+            task_struct.xepc = task as u64;
             return Some(task_struct);
         }
     }
@@ -62,7 +63,7 @@ pub fn create_task(task: fn()) -> Option<&'static TaskStruct> {
 
 fn idle_task() {
     print_string("Idle task is running!\n");
-    crate::ecall!();
+    // crate::ecall!();
     loop {
         crate::wfi!();
     }
@@ -88,7 +89,7 @@ pub fn create_idle_task() -> Option<&'static TaskStruct> {
     task_struct.state = TaskState::Ready;
     task_struct.stack_ptr = get_idle_stack_ptr();
     task_struct.sp = get_idle_stack_ptr() as u64;
-    task_struct.sepc = idle_task as u64;
+    task_struct.xepc = idle_task as u64;
     Some(task_struct)
 }
 
@@ -101,10 +102,12 @@ pub fn scheduler() -> &'static TaskStruct {
             set_current_task(next_id);
             next_task.state = TaskState::Running;
             csr::write_sscratch(next_task as *const TaskStruct as u64);
+            csr::sstatus_set_pp(PrivilegeMode::User);
             return next_task;
         }
     }
     let idle_task = get_idle_task_struct();
+    csr::sstatus_set_pp(PrivilegeMode::Supervisor);
     csr::write_sscratch(idle_task as *const TaskStruct as u64);
     idle_task
 }
