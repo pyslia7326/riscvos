@@ -1,4 +1,4 @@
-pub const INTERRUPT_BIT: u64 = 0x80000000;
+pub const INTERRUPT_BIT: u64 = 1 << 63;
 
 // Reserved: 0
 pub const SUPERVISOR_SOFTWARE_INTERRUPT: u64 = 1 | INTERRUPT_BIT;
