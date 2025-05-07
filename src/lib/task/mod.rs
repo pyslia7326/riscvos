@@ -1,6 +1,7 @@
 use core::mem::offset_of;
 
 pub mod scheduler;
+pub mod test_task;
 
 const MAX_TASK_NUM: usize = 12;
 const USER_STACK_SIZE: usize = 4096;
@@ -23,7 +24,8 @@ pub struct TaskStruct {
     pub id: Option<u64>,
     pub state: TaskState,
     pub stack_ptr: *mut u8,
-    pub sepc: u64,
+    pub xepc: u64,
+    pub xcause: u64,
     pub ra: u64,
     pub sp: u64,
     pub gp: u64,
@@ -33,7 +35,8 @@ pub struct TaskStruct {
     pub a: [u64; 8],
 }
 
-pub const OFFSET_SEPC: usize = offset_of!(TaskStruct, sepc);
+pub const OFFSET_XEPC: usize = offset_of!(TaskStruct, xepc);
+pub const OFFSET_XCAUSE: usize = offset_of!(TaskStruct, xcause);
 
 pub const OFFSET_RA: usize = offset_of!(TaskStruct, ra);
 pub const OFFSET_SP: usize = offset_of!(TaskStruct, sp);
@@ -87,7 +90,8 @@ impl TaskStruct {
             id: None,
             state: TaskState::None,
             stack_ptr: core::ptr::null_mut(),
-            sepc: 0,
+            xepc: 0,
+            xcause: 0,
             ra: 0,
             sp: 0,
             gp: 0,
