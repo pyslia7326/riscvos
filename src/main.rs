@@ -4,6 +4,7 @@
 mod start;
 
 use core::panic::PanicInfo;
+use core::ptr;
 use lib::csr;
 use lib::riscv::PrivilegeMode;
 use lib::task;
@@ -45,8 +46,8 @@ fn kernel() -> ! {
     // Print message and a test integer in S-mode
     print_string("Kernel is running in S-mode!\n");
 
-    scheduler::create_task(task::test_task::user_task1);
-    scheduler::create_task(task::test_task::user_task2);
+    scheduler::task_create(task::test_task::user_task1, 1, ptr::null());
+    scheduler::task_create(task::test_task::user_task2, 1, ptr::null());
     scheduler::create_idle_task();
 
     csr::write_stvec(user_trap as u64);
