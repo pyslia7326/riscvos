@@ -1,5 +1,6 @@
 use crate::csr;
 use crate::riscv::PrivilegeMode;
+use crate::syscall::sys_exit;
 use crate::task::MAX_TASK_NUM;
 use crate::task::Stack;
 use crate::task::TaskState;
@@ -13,6 +14,8 @@ static mut IDLE_TASK: [TaskStruct; 1] = [TaskStruct::new(); 1];
 static mut IDLE_STACK: [Stack; 1] = [Stack::new(); 1];
 static mut KERNEL_TASK: [TaskStruct; 1] = [TaskStruct::new(); 1];
 static mut CURRENT_TASK: usize = 0;
+
+pub type RawTaskFn = fn(argc: u64, argv: *const *const u8);
 
 pub fn get_kernel_task_struct() -> &'static mut TaskStruct {
     unsafe {
@@ -46,7 +49,16 @@ pub fn get_task_struct(id: usize) -> &'static mut TaskStruct {
     }
 }
 
-pub fn create_task(task: fn()) -> Option<&'static TaskStruct> {
+fn task_start(task: RawTaskFn, argc: u64, argv: *const *const u8) {
+    task(argc, argv);
+    sys_exit(0);
+}
+
+pub fn task_create(
+    task: RawTaskFn,
+    argc: u64,
+    argv: *const *const u8,
+) -> Option<&'static TaskStruct> {
     for i in 0..MAX_TASK_NUM {
         let task_struct = get_task_struct(i);
         if task_struct.state == TaskState::None {
@@ -54,7 +66,10 @@ pub fn create_task(task: fn()) -> Option<&'static TaskStruct> {
             task_struct.id = Some(i as u64);
             task_struct.stack_ptr = get_stack_ptr(i);
             task_struct.sp = get_stack_ptr(i) as u64;
-            task_struct.xepc = task as u64;
+            task_struct.xepc = task_start as u64;
+            task_struct.a[0] = task as u64;
+            task_struct.a[1] = argc;
+            task_struct.a[2] = argv as u64;
             return Some(task_struct);
         }
     }
