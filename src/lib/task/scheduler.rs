@@ -6,6 +6,7 @@ use crate::task::Stack;
 use crate::task::TaskState;
 use crate::task::TaskStruct;
 use crate::task::USER_STACK_SIZE;
+use crate::timer::get_current_tick;
 use crate::uart::print_string;
 
 static mut TASKS: [TaskStruct; MAX_TASK_NUM] = [TaskStruct::new(); MAX_TASK_NUM];
@@ -110,6 +111,21 @@ pub fn create_idle_task() -> Option<&'static TaskStruct> {
 
 pub fn scheduler() -> &'static TaskStruct {
     let current_id = get_current_task();
+
+    // wake up task first
+    for i in 0..MAX_TASK_NUM {
+        let task_id = (current_id + i + 1) % MAX_TASK_NUM;
+        let task = get_task_struct(task_id);
+        if task.state == TaskState::Sleeping {
+            if let Some(sleep_until) = task.sleep_until {
+                if get_current_tick() >= sleep_until {
+                    task.state = TaskState::Ready;
+                    task.sleep_until = None;
+                }
+            }
+        }
+    }
+
     for i in 0..MAX_TASK_NUM {
         let next_id = (current_id + i + 1) % MAX_TASK_NUM;
         let next_task = get_task_struct(next_id);
