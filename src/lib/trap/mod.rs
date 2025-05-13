@@ -15,16 +15,16 @@ pub fn trap_dispatch(cur_task_struct: &mut TaskStruct) {
     let cause = cur_task_struct.xcause;
     match cause {
         interrupt::MACHINE_TIMER_INTERRUPT => {
-            print_string("==========================================\n");
-            print_string("  Triggered a machine timer interrupt!\n");
-            print_string("==========================================\n");
+            // print_string("==========================================\n");
+            // print_string("  Triggered a machine timer interrupt!\n");
+            // print_string("==========================================\n");
             // timer_handler will reassign a supervisor software interrupt
             timer_handler();
         }
         interrupt::SUPERVISOR_SOFTWARE_INTERRUPT => {
-            print_string("==========================================\n");
-            print_string("Triggered a supervisor software interrupt!\n");
-            print_string("==========================================\n");
+            // print_string("==========================================\n");
+            // print_string("Triggered a supervisor software interrupt!\n");
+            // print_string("==========================================\n");
             cur_task_struct.state = TaskState::Ready;
             let next_task_struct = scheduler();
             csr::write_sepc(next_task_struct.xepc);
@@ -38,9 +38,9 @@ pub fn trap_dispatch(cur_task_struct: &mut TaskStruct) {
             }
         }
         exception::ENVIRONMENT_CALL_FROM_U_MODE => {
-            print_string("==========================================\n");
-            print_string("    Triggered a user environment call!\n");
-            print_string("==========================================\n");
+            // print_string("==========================================\n");
+            // print_string("    Triggered a user environment call!\n");
+            // print_string("==========================================\n");
             syscall_handler(cur_task_struct);
             let next_task_struct = scheduler();
             csr::write_sepc(next_task_struct.xepc);
