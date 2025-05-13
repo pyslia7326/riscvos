@@ -1,18 +1,31 @@
-use crate::uart::{print_integerln, print_string};
+use crate::mutex::Mutex;
+use crate::uart::print_integerln;
+
+static mut TMP: u64 = 0;
+static LOCK: Mutex = Mutex::new();
 
 pub fn user_task1(_argc: u64, _argv: *const *const u8) {
-    print_string("User Task 1 is running!\n");
-    for c in 0..=5 {
-        print_string("User Task 1 count: ");
-        print_integerln(c);
-        crate::syscall::sys_sleep(100);
+    for _ in 0..1000000 {
+        LOCK.lock();
+        unsafe {
+            TMP += 1;
+        }
+        LOCK.unlock();
     }
+    LOCK.lock();
+    print_integerln(unsafe { TMP });
+    LOCK.unlock();
 }
+
 pub fn user_task2(_argc: u64, _argv: *const *const u8) {
-    print_string("User Task 2 is running!\n");
-    for c in 0..=10 {
-        print_string("User Task 2 count: ");
-        print_integerln(c);
-        crate::syscall::sys_sleep(300);
+    for _ in 0..1000000 {
+        LOCK.lock();
+        unsafe {
+            TMP += 1;
+        }
+        LOCK.unlock();
     }
+    LOCK.lock();
+    print_integerln(unsafe { TMP });
+    LOCK.unlock();
 }
