@@ -11,6 +11,7 @@ pub enum TaskState {
     None,
     Ready,
     Running,
+    Sleeping,
     Blocked,
 }
 
@@ -24,6 +25,7 @@ pub struct TaskStruct {
     pub id: Option<u64>,
     pub state: TaskState,
     pub stack_ptr: *mut u8,
+    pub sleep_until: Option<u64>,
     pub xepc: u64,
     pub xcause: u64,
     pub ra: u64,
@@ -90,6 +92,7 @@ impl TaskStruct {
             id: None,
             state: TaskState::None,
             stack_ptr: core::ptr::null_mut(),
+            sleep_until: None,
             xepc: 0,
             xcause: 0,
             ra: 0,
