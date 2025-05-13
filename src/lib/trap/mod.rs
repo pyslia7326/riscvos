@@ -8,7 +8,6 @@ use crate::syscall::syscall_handler;
 use crate::task::scheduler::scheduler;
 use crate::task::{TaskState, TaskStruct};
 use crate::timer::timer_handler;
-use crate::uart::{print_integerln, print_string};
 
 #[unsafe(no_mangle)]
 pub fn trap_dispatch(cur_task_struct: &mut TaskStruct) {
@@ -30,12 +29,12 @@ pub fn trap_dispatch(cur_task_struct: &mut TaskStruct) {
             csr::write_sepc(next_task_struct.xepc);
             csr::write_sscratch(next_task_struct as *const TaskStruct as u64);
             csr::write_sip(csr::read_sip() & !(1 << csr::SIP_SSIP));
-            print_string("switch to task pid: ");
-            if let Some(pid) = next_task_struct.id {
-                print_integerln(pid);
-            } else {
-                print_string("idle\n");
-            }
+            // print_string("switch to task pid: ");
+            // if let Some(pid) = next_task_struct.id {
+            //     print_integerln(pid);
+            // } else {
+            //     print_string("idle\n");
+            // }
         }
         exception::ENVIRONMENT_CALL_FROM_U_MODE => {
             // print_string("==========================================\n");
@@ -45,12 +44,12 @@ pub fn trap_dispatch(cur_task_struct: &mut TaskStruct) {
             let next_task_struct = scheduler();
             csr::write_sepc(next_task_struct.xepc);
             csr::write_sscratch(next_task_struct as *const TaskStruct as u64);
-            print_string("switch to task pid: ");
-            if let Some(pid) = next_task_struct.id {
-                print_integerln(pid);
-            } else {
-                print_string("idle\n");
-            }
+            // print_string("switch to task pid: ");
+            // if let Some(pid) = next_task_struct.id {
+            //     print_integerln(pid);
+            // } else {
+            //     print_string("idle\n");
+            // }
         }
         // exception::ENVIRONMENT_CALL_FROM_S_MODE => {
         //     print_string("==========================================\n");
