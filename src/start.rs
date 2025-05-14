@@ -1,25 +1,23 @@
-use core::arch::global_asm;
+use core::arch::asm;
 
-global_asm!(
-    r#"
-    .section .text._start
-    .global _start
+#[unsafe(no_mangle)]
+fn _start() -> ! {
+    unsafe {
+        asm!(
+            "csrr a0, mhartid",
+            "bnez a0, park",
+            "la sp, stack_top",
+            "j main",
+            options(noreturn)
+        )
+    }
+}
 
-    .equ STACK_SIZE, 8192
-
-    _start:
-        csrr a0, mhartid
-        bnez a0, park
-        la   sp, stacks + STACK_SIZE
-        j    main
-
-    park:
-        wfi
-        j park
-
-        .section .bss.stacks, "aw", @nobits
-        .global stacks
-    stacks:
-        .skip STACK_SIZE
-"#
-);
+#[unsafe(no_mangle)]
+fn park() -> ! {
+    unsafe {
+        loop {
+            asm!("wfi");
+        }
+    }
+}

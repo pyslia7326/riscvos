@@ -1,4 +1,4 @@
-ENTRY(_start);
+ENTRY(_start)
 
 MEMORY
 {
@@ -13,10 +13,15 @@ SECTIONS
   } > RAM
 
   .rodata : { *(.rodata*) } > RAM
+
   .data : { *(.data*) } > RAM
+
   .bss : {
     *(.bss*)
-    *(.bss.stacks)
     *(COMMON)
+    _bss_end = .;
   } > RAM
+
+  . = ORIGIN(RAM) + LENGTH(RAM);
+  stack_top = .;
 }
