@@ -8,6 +8,7 @@ use crate::syscall::syscall_handler;
 use crate::task::scheduler::scheduler;
 use crate::task::{TaskState, TaskStruct};
 use crate::timer::timer_handler;
+use crate::uart::uart_write_buffer_flush;
 
 #[unsafe(no_mangle)]
 pub fn trap_dispatch(cur_task_struct: &mut TaskStruct) {
@@ -73,5 +74,13 @@ pub fn trap_dispatch(cur_task_struct: &mut TaskStruct) {
             csr::write_sepc(cur_task_struct.xepc);
             csr::write_sscratch(cur_task_struct as *const TaskStruct as u64);
         }
+    }
+    // Only flush UART buffer for non-m-mode timer interrupts.
+    // If sys_write is holding the UART spin lock and a machine timer interrupt (m-mode) occurs,
+    // the timer interrupt handler would also try to acquire the same lock to flush the buffer,
+    // causing the interrupt handler to spin (busy wait) until the lock is released.
+    // To avoid this potential deadlock/spin, we skip flushing in m-mode timer interrupts.
+    if cause != interrupt::MACHINE_TIMER_INTERRUPT {
+        uart_write_buffer_flush();
     }
 }
