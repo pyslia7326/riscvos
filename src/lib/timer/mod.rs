@@ -49,7 +49,7 @@ pub fn timer_init() {
 }
 
 pub fn timer_handler() {
-    csr::write_mip(csr::read_mip() | (1 << csr::MIP_MSIP));
+    // csr::write_mip(1 << csr::MIP_MSIP);
     csr::write_sip(csr::read_sip() | (1 << csr::SIP_SSIP));
 
     let hart_id = csr::read_mhartid();
