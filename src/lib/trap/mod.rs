@@ -4,11 +4,12 @@ pub mod kernel_trap;
 pub mod user_trap;
 
 use crate::csr;
+use crate::plic::{UART0_IRQ, plic_claim, plic_complete};
 use crate::syscall::syscall_handler;
 use crate::task::scheduler::scheduler;
 use crate::task::{TaskState, TaskStruct};
 use crate::timer::timer_handler;
-use crate::uart::uart_write_buffer_flush;
+use crate::uart::{print_string, uart_irq_handler, uart_write_buffer_flush};
 
 #[unsafe(no_mangle)]
 pub fn trap_dispatch(cur_task_struct: &mut TaskStruct) {
@@ -30,44 +31,23 @@ pub fn trap_dispatch(cur_task_struct: &mut TaskStruct) {
             csr::write_sepc(next_task_struct.xepc);
             csr::write_sscratch(next_task_struct as *const TaskStruct as u64);
             csr::write_sip(csr::read_sip() & !(1 << csr::SIP_SSIP));
-            // print_string("switch to task pid: ");
-            // if let Some(pid) = next_task_struct.id {
-            //     print_integerln(pid);
-            // } else {
-            //     print_string("idle\n");
-            // }
+        }
+        interrupt::SUPERVISOR_EXTERNAL_INTERRUPT => {
+            let irq_id = plic_claim();
+            match irq_id {
+                UART0_IRQ => uart_irq_handler(),
+                _ => print_string("not implement irq\n"),
+            }
+            if irq_id > 0 {
+                plic_complete(irq_id);
+            }
         }
         exception::ENVIRONMENT_CALL_FROM_U_MODE => {
-            // print_string("==========================================\n");
-            // print_string("    Triggered a user environment call!\n");
-            // print_string("==========================================\n");
             syscall_handler(cur_task_struct);
             let next_task_struct = scheduler();
             csr::write_sepc(next_task_struct.xepc);
             csr::write_sscratch(next_task_struct as *const TaskStruct as u64);
-            // print_string("switch to task pid: ");
-            // if let Some(pid) = next_task_struct.id {
-            //     print_integerln(pid);
-            // } else {
-            //     print_string("idle\n");
-            // }
         }
-        // exception::ENVIRONMENT_CALL_FROM_S_MODE => {
-        //     print_string("==========================================\n");
-        //     print_string(" Triggered a supervisor environment call!\n");
-        //     print_string("==========================================\n");
-        //     // Increment sepc to the instruction after ecall.
-        //     cur_task_struct.xepc += 4;
-        //     let next_task_struct = scheduler();
-        //     csr::write_sepc(next_task_struct.xepc);
-        //     csr::write_sscratch(next_task_struct as *const TaskStruct as u64);
-        //     print_string("switch to task pid: ");
-        //     if let Some(pid) = next_task_struct.id {
-        //         print_integerln(pid);
-        //     } else {
-        //         print_string("idle\n");
-        //     }
-        // }
         _ => {
             // Resume the current task
             cur_task_struct.state = TaskState::Running;
