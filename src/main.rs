@@ -6,13 +6,14 @@ mod start;
 use core::panic::PanicInfo;
 use core::ptr;
 use lib::csr;
+use lib::plic::plic_init;
 use lib::riscv::PrivilegeMode;
 use lib::task;
 use lib::task::scheduler;
 use lib::timer::timer_init;
 use lib::trap::kernel_trap::kernel_trap;
 use lib::trap::user_trap::user_trap;
-use lib::uart::print_string;
+use lib::uart::{print_string, uart_init};
 
 #[unsafe(no_mangle)]
 fn main() -> ! {
@@ -45,7 +46,6 @@ fn main() -> ! {
 fn kernel() -> ! {
     // Print message and a test integer in S-mode
     print_string("Kernel is running in S-mode!\n");
-
     scheduler::task_create(task::test_task::user_task1, 1, ptr::null());
     scheduler::task_create(task::test_task::user_task2, 1, ptr::null());
     scheduler::create_idle_task();
@@ -58,6 +58,9 @@ fn kernel() -> ! {
 
     csr::write_sstatus(csr::read_sstatus() | (1 << csr::SSTATUS_SPIE)); // Enable S-mode interrupts after sret (switch to idle_task)
     csr::write_sie(csr::read_sie() | (1 << csr::SIE_SSIE)); // Enable software interrupt
+    csr::write_sie(csr::read_sie() | (1 << csr::SIE_SEIE));
+    plic_init();
+    uart_init();
     lib::sret!();
 
     loop {}
