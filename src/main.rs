@@ -8,17 +8,21 @@ use core::ptr;
 use lib::csr;
 use lib::plic::plic_init;
 use lib::riscv::PrivilegeMode;
+use lib::shell;
 use lib::task;
 use lib::task::scheduler;
 use lib::timer::timer_init;
 use lib::trap::kernel_trap::kernel_trap;
 use lib::trap::user_trap::user_trap;
-use lib::uart::{print_string, uart_init};
+use lib::uart::{print_char, uart_init};
+
+static STARTUP_MESSAGE: &[u8] = include_bytes!("startup_message.txt");
 
 #[unsafe(no_mangle)]
 fn main() -> ! {
-    print_string("Hello, world!\n");
-
+    for &c in STARTUP_MESSAGE.iter() {
+        print_char(c as char);
+    }
     // Configure PMP to allow full access to all memory
     csr::write_pmpaddr0(0x3FFFFFFFFFFFFF); // Set PMP address to cover all memory
     csr::write_pmpcfg0(0xF); // Enable R/W/X permissions with NA4 address matching
@@ -44,10 +48,7 @@ fn main() -> ! {
 
 #[unsafe(no_mangle)]
 fn kernel() -> ! {
-    // Print message and a test integer in S-mode
-    print_string("Kernel is running in S-mode!\n");
-    scheduler::task_create(task::test_task::user_task1, 1, ptr::null());
-    scheduler::task_create(task::test_task::user_task2, 1, ptr::null());
+    scheduler::task_create(shell::shell, 1, ptr::null());
     scheduler::create_idle_task();
 
     csr::write_stvec(user_trap as u64);

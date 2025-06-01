@@ -1,31 +1,7 @@
-use crate::mutex::Mutex;
-use crate::uart::print_integerln;
-
-static mut TMP: u64 = 0;
-static LOCK: Mutex = Mutex::new();
+use crate::syscall::sys_sleep;
 
 pub fn user_task1(_argc: u64, _argv: *const *const u8) {
-    for _ in 0..1000000 {
-        LOCK.lock();
-        unsafe {
-            TMP += 1;
-        }
-        LOCK.unlock();
+    loop {
+        sys_sleep(1000);
     }
-    LOCK.lock();
-    print_integerln(unsafe { TMP });
-    LOCK.unlock();
-}
-
-pub fn user_task2(_argc: u64, _argv: *const *const u8) {
-    for _ in 0..1000000 {
-        LOCK.lock();
-        unsafe {
-            TMP += 1;
-        }
-        LOCK.unlock();
-    }
-    LOCK.lock();
-    print_integerln(unsafe { TMP });
-    LOCK.unlock();
 }

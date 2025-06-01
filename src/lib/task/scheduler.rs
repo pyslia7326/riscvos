@@ -7,7 +7,6 @@ use crate::task::TaskState;
 use crate::task::TaskStruct;
 use crate::task::USER_STACK_SIZE;
 use crate::timer::get_current_tick;
-use crate::uart::print_string;
 
 static mut TASKS: [TaskStruct; MAX_TASK_NUM] = [TaskStruct::new(); MAX_TASK_NUM];
 static mut TASK_STACKS: [Stack; MAX_TASK_NUM] = [Stack::new(); MAX_TASK_NUM];
@@ -78,7 +77,7 @@ pub fn task_create(
 }
 
 fn idle_task() {
-    print_string("Idle task is running!\n");
+    // print_string("Idle task is running!\n");
     // crate::ecall!();
     loop {
         crate::wfi!();
