@@ -1,6 +1,7 @@
 use crate::task::{TaskState, TaskStruct};
 use crate::timer::get_current_tick;
 use crate::uart::{uart_read, uart_write};
+use crate::utils::u64_to_str;
 
 #[derive(Clone, Copy)]
 #[repr(u64)]
@@ -112,6 +113,26 @@ pub fn sys_write(s: &str) {
             ptr = in(reg) s.as_ptr(),
             len = in(reg) s.len(),
         );
+    }
+}
+
+pub fn sys_write_u64(num: u64) {
+    let mut buffer = [0; 20];
+    match u64_to_str(num, &mut buffer) {
+        Ok(num) => unsafe {
+            core::arch::asm!(
+                "mv a7, {syscall_code}",
+                "mv a0, {ptr}",
+                "mv a1, {len}",
+                "ecall",
+                syscall_code = in(reg) Syscall::Write.code(),
+                ptr = in(reg) num.as_ptr(),
+                len = in(reg) num.len(),
+            );
+        },
+        Err(_) => {
+            //
+        }
     }
 }
 
