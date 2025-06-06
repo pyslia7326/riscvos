@@ -12,7 +12,7 @@ and low-level programming in Rust.
 * UART serial output and input with interrupt-driven buffering
 * Trap and interrupt handling (timer, external, syscall)
 * Basic multitasking with a round-robin scheduler
-* System call interface (yield, exit, sleep, read, write)
+* System call interface (yield, exit, sleep, read, write, wait)
 * Simple shell for user interaction
 
 ## Notes on PMP and Memory Alignment
@@ -106,19 +106,9 @@ make gdb
 
 ## TODO / Ideas
 
-* Add memory allocator
-* Support dynamic task creation from the shell
-* Improve shell functionality (command parsing, extensibility)
+* Add more complex memory allocator instead of bump allocator
+* Improve shell functionality (extensibility)
 * Add basic file system or storage support
-* Update user task function signature to a more idiomatic Rust style:
-
-  ```rust
-  // From:
-  type RawTaskFn = fn(argc: u64, argv: *const *const u8);
-
-  // To:
-  type RawTaskFn = fn(argc: u64, argv: &[&str]);
-  ```
 
 ## References
 
