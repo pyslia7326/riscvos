@@ -1,7 +1,8 @@
+use crate::task::scheduler::get_task_state;
 use crate::task::{TaskState, TaskStruct};
 use crate::timer::get_current_tick;
 use crate::uart::{uart_read, uart_write};
-use crate::utils::u64_to_str;
+use crate::utils::cstr::u64_to_str;
 
 #[derive(Clone, Copy)]
 #[repr(u64)]
@@ -11,6 +12,7 @@ pub enum Syscall {
     Sleep = 2,
     Write = 3,
     Read = 4,
+    Wait = 5,
     Unknown,
 }
 
@@ -26,6 +28,7 @@ impl Syscall {
             2 => Syscall::Sleep,
             3 => Syscall::Write,
             4 => Syscall::Read,
+            5 => Syscall::Wait,
             _ => Syscall::Unknown,
         }
     }
@@ -63,6 +66,13 @@ pub fn syscall_handler(task: &mut TaskStruct) {
             let len = task.a[1] as usize;
             let read_len = uart_read(buf, len).unwrap_or(0);
             task.a[0] = read_len as u64;
+        }
+        Syscall::Wait => {
+            task.state = TaskState::Ready;
+            let wait_id = task.a[0];
+            if get_task_state(wait_id as usize) == TaskState::None {
+                task.xepc += 4;
+            }
         }
         Syscall::Unknown => panic!("Unknown syscall code: {}", task.a[7]),
     }
@@ -152,4 +162,16 @@ pub fn sys_read(buf: &[u8]) -> Option<u64> {
         );
     }
     if read_len == 0 { None } else { Some(read_len) }
+}
+
+pub fn sys_wait(pid: usize) {
+    unsafe {
+        core::arch::asm!(
+            "mv a7, {syscall_code}",
+            "mv a0, {pid}",
+            "ecall",
+            syscall_code = in(reg) Syscall::Wait.code(),
+            pid = in(reg) pid,
+        );
+    }
 }
