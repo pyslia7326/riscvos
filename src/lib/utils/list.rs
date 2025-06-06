@@ -29,43 +29,43 @@ pub struct LinkedList<T> {
 
 impl<T: Default> LinkedList<T> {
     pub fn new() -> Option<Self> {
-        let node_ptr = ListNode::new(T::default())?;
+        let mut node = ListNode::new(T::default())?;
         unsafe {
-            (*node_ptr.as_ptr()).prev = Some(node_ptr);
-            (*node_ptr.as_ptr()).next = Some(node_ptr);
+            (*node.as_mut()).prev = Some(node);
+            (*node.as_mut()).next = Some(node);
         }
         Some(Self {
-            head: Some(node_ptr),
+            head: Some(node),
         })
     }
 
     pub fn is_empty(&self) -> bool {
         let head = self.head.expect("LinkedList head should not be None");
-        unsafe { (*head.as_ptr()).next == Some(head) }
+        unsafe { (*head.as_ref()).next == Some(head) }
     }
 
     pub fn push_front(&mut self, value: T) -> Option<NonNull<ListNode<T>>> {
-        let head = self.head?;
-        let node = ListNode::new(value)?;
+        let mut head = self.head?;
+        let mut node = ListNode::new(value)?;
         unsafe {
-            let next = (*head.as_ptr()).next?;
-            (*next.as_ptr()).prev = Some(node);
-            (*node.as_ptr()).next = Some(next);
-            (*node.as_ptr()).prev = Some(head);
-            (*head.as_ptr()).next = Some(node);
+            let mut next = (*head.as_ref()).next?;
+            (*next.as_mut()).prev = Some(node);
+            (*node.as_mut()).next = Some(next);
+            (*node.as_mut()).prev = Some(head);
+            (*head.as_mut()).next = Some(node);
         }
         Some(node)
     }
 
     pub fn push_back(&mut self, value: T) -> Option<NonNull<ListNode<T>>> {
-        let head = self.head?;
-        let node = ListNode::new(value)?;
+        let mut head = self.head?;
+        let mut node = ListNode::new(value)?;
         unsafe {
-            let prev = (*head.as_ptr()).prev?;
-            (*prev.as_ptr()).next = Some(node);
-            (*node.as_ptr()).prev = Some(prev);
-            (*node.as_ptr()).next = Some(head);
-            (*head.as_ptr()).prev = Some(node);
+            let mut prev = (*head.as_ref()).prev?;
+            (*prev.as_mut()).next = Some(node);
+            (*node.as_mut()).prev = Some(prev);
+            (*node.as_mut()).next = Some(head);
+            (*head.as_mut()).prev = Some(node);
         }
         Some(node)
     }
@@ -76,12 +76,12 @@ impl<T: Default> LinkedList<T> {
         }
         let head = self.head?;
         unsafe {
-            let node = (*head.as_ptr()).next?;
-            let next = (*node.as_ptr()).next?;
-            let prev = (*node.as_ptr()).prev?;
-            (*next.as_ptr()).prev = Some(prev);
-            (*prev.as_ptr()).next = Some(next);
-            let val = core::ptr::read(&(*node.as_ptr()).value);
+            let node = (*head.as_ref()).next?;
+            let mut next = (*node.as_ref()).next?;
+            let mut prev = (*node.as_ref()).prev?;
+            (*next.as_mut()).prev = Some(prev);
+            (*prev.as_mut()).next = Some(next);
+            let val = core::ptr::read(&(*node.as_ref()).value);
             free(node.as_ptr() as *mut u8);
             Some(val)
         }
@@ -93,12 +93,12 @@ impl<T: Default> LinkedList<T> {
         }
         let head = self.head?;
         unsafe {
-            let node = (*head.as_ptr()).prev?;
-            let next = (*node.as_ptr()).next?;
-            let prev = (*node.as_ptr()).prev?;
-            (*next.as_ptr()).prev = Some(prev);
-            (*prev.as_ptr()).next = Some(next);
-            let val = core::ptr::read(&(*node.as_ptr()).value);
+            let node = (*head.as_ref()).prev?;
+            let mut next = (*node.as_ref()).next?;
+            let mut prev = (*node.as_ref()).prev?;
+            (*next.as_mut()).prev = Some(prev);
+            (*prev.as_mut()).next = Some(next);
+            let val = core::ptr::read(&(*node.as_ref()).value);
             free(node.as_ptr() as *mut u8);
             Some(val)
         }
@@ -118,7 +118,7 @@ impl<T: Default> LinkedList<T> {
         let head = self.head?;
         Some(LinkedListIter {
             head,
-            current: unsafe { (*head.as_ptr()).next },
+            current: unsafe { (*head.as_ref()).next },
             _marker: core::marker::PhantomData,
         })
     }
