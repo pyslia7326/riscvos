@@ -10,6 +10,7 @@ pub unsafe fn malloc(nbytes: usize) -> Option<*mut u8> {
     unsafe {
         HEAP_LOCK.lock();
         if PROGRAM_BREAK + nbytes > HEAP_SIZE {
+            HEAP_LOCK.unlock();
             return None;
         }
         let ptr = HEAP.as_ptr().add(PROGRAM_BREAK);
@@ -19,5 +20,8 @@ pub unsafe fn malloc(nbytes: usize) -> Option<*mut u8> {
     }
 }
 
+pub unsafe fn free(_ptr: *mut u8) {
+    // do nothing now
+}
 // TODO (freelist) pub unsafe fn malloc(nbytes: usize) -> Option<*mut u8>;
 // TODO pub unsafe fn free(ptr: *mut u8);
