@@ -15,7 +15,7 @@ static mut IDLE_STACK: [Stack; 1] = [Stack::new(); 1];
 static mut KERNEL_TASK: [TaskStruct; 1] = [TaskStruct::new(); 1];
 static mut CURRENT_TASK: usize = 0;
 
-pub type RawTaskFn = fn(argc: u64, argv: *const *const u8);
+pub type RawTaskFn = fn(argc: u64, argv: &[&str]);
 
 pub fn get_kernel_task_struct() -> &'static mut TaskStruct {
     unsafe {
@@ -49,16 +49,38 @@ pub fn get_task_struct(id: usize) -> &'static mut TaskStruct {
     }
 }
 
-fn task_start(task: RawTaskFn, argc: u64, argv: *const *const u8) {
-    task(argc, argv);
+pub fn get_task_state(id: usize) -> TaskState {
+    unsafe { TASKS[id].state }
+}
+
+fn task_start(task: RawTaskFn, args: *const u8, len: usize) {
+    use core::slice;
+    use core::str;
+    if args.is_null() && len > 0 {
+        return sys_exit(0);
+    }
+    let args = unsafe { slice::from_raw_parts(args, len) };
+    let s = match str::from_utf8(args) {
+        Ok(s) => s.trim_end_matches('\0'),
+        Err(_) => return sys_exit(0),
+    };
+    let mut argv_buf: [&str; 5] = [""; 5];
+    let mut argc = 0;
+    for token in s.split(' ') {
+        if token.is_empty() {
+            continue;
+        }
+        if argc >= 5 {
+            break;
+        }
+        argv_buf[argc] = token;
+        argc += 1;
+    }
+    task(argc as u64, &argv_buf[..argc]);
     sys_exit(0);
 }
 
-pub fn task_create(
-    task: RawTaskFn,
-    argc: u64,
-    argv: *const *const u8,
-) -> Option<&'static TaskStruct> {
+pub fn task_create(task: RawTaskFn, args: *const u8, len: usize) -> Option<&'static TaskStruct> {
     for i in 0..MAX_TASK_NUM {
         let task_struct = get_task_struct(i);
         if task_struct.state == TaskState::None {
@@ -68,8 +90,8 @@ pub fn task_create(
             task_struct.sp = get_stack_ptr(i) as u64;
             task_struct.xepc = task_start as u64;
             task_struct.a[0] = task as u64;
-            task_struct.a[1] = argc;
-            task_struct.a[2] = argv as u64;
+            task_struct.a[1] = args as u64;
+            task_struct.a[2] = len as u64;
             return Some(task_struct);
         }
     }

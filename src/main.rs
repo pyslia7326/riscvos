@@ -4,7 +4,6 @@
 mod start;
 
 use core::panic::PanicInfo;
-use core::ptr;
 use lib::csr;
 use lib::plic::plic_init;
 use lib::riscv::PrivilegeMode;
@@ -48,7 +47,7 @@ fn main() -> ! {
 
 #[unsafe(no_mangle)]
 fn kernel() -> ! {
-    scheduler::task_create(shell::shell, 1, ptr::null());
+    // scheduler::task_create(shell::shell, "".as_ptr(), 0);
     scheduler::create_idle_task();
 
     csr::write_stvec(user_trap as u64);
