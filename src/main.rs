@@ -47,7 +47,7 @@ fn main() -> ! {
 
 #[unsafe(no_mangle)]
 fn kernel() -> ! {
-    // scheduler::task_create(shell::shell, "".as_ptr(), 0);
+    scheduler::task_create(shell::shell, "".as_ptr(), 0);
     scheduler::create_idle_task();
 
     csr::write_stvec(user_trap as u64);
