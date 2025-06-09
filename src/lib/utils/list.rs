@@ -113,7 +113,7 @@ impl<T> LinkedList<T> {
         Some(node_arc)
     }
 
-    fn remove_node_safe(
+    pub fn remove_node_safe(
         node_to_remove: Arc<Mutex<ListNode<T>, YieldLock>>,
     ) -> Option<Arc<Mutex<ListNode<T>, YieldLock>>> {
         let (prev_arc, next_arc) = {
@@ -167,7 +167,14 @@ impl<T> Drop for LinkedList<T> {
 
 pub struct LinkedListIter<'a, T> {
     head: &'a Arc<Mutex<ListNode<T>, YieldLock>>,
-    current: Arc<Mutex<ListNode<T>, YieldLock>>,
+    entry: Arc<Mutex<ListNode<T>, YieldLock>>,
+    _marker: core::marker::PhantomData<&'a T>,
+}
+
+pub struct LinkedListIterSafe<'a, T> {
+    head: &'a Arc<Mutex<ListNode<T>, YieldLock>>,
+    entry: Arc<Mutex<ListNode<T>, YieldLock>>,
+    safe: Arc<Mutex<ListNode<T>, YieldLock>>,
     _marker: core::marker::PhantomData<&'a T>,
 }
 
@@ -180,21 +187,55 @@ impl<T> LinkedList<T> {
         };
         Some(LinkedListIter {
             head,
-            current: next,
+            entry: next,
+            _marker: core::marker::PhantomData,
+        })
+    }
+
+    pub fn iter_safe(&self) -> Option<LinkedListIterSafe<'_, T>> {
+        let head = self.head.as_ref()?;
+        let next = {
+            let head_guard = head.get_ref().lock();
+            head_guard.next.as_ref()?.clone()
+        };
+        let safe = {
+            let next_guard = next.get_ref().lock();
+            next_guard.next.as_ref()?.clone()
+        };
+        Some(LinkedListIterSafe {
+            head,
+            entry: next,
+            safe: safe,
             _marker: core::marker::PhantomData,
         })
     }
 }
 
-impl<'a, T: Clone> Iterator for LinkedListIter<'a, T> {
+impl<'a, T> Iterator for LinkedListIter<'a, T> {
     type Item = Arc<Mutex<ListNode<T>, YieldLock>>;
     fn next(&mut self) -> Option<Self::Item> {
-        if Arc::ptr_eq(self.head, &self.current) {
+        if Arc::ptr_eq(self.head, &self.entry) {
             return None;
         }
-        let current_node = self.current.clone();
-        self.current = {
+        let current_node = self.entry.clone();
+        self.entry = {
             let current_guard = current_node.get_ref().lock();
+            current_guard.next.as_ref()?.clone()
+        };
+        Some(current_node)
+    }
+}
+
+impl<'a, T> Iterator for LinkedListIterSafe<'a, T> {
+    type Item = Arc<Mutex<ListNode<T>, YieldLock>>;
+    fn next(&mut self) -> Option<Self::Item> {
+        if Arc::ptr_eq(self.head, &self.entry) {
+            return None;
+        }
+        let current_node = self.entry.clone();
+        self.entry = self.safe.clone();
+        self.safe = {
+            let current_guard = self.entry.get_ref().lock();
             current_guard.next.as_ref()?.clone()
         };
         Some(current_node)
