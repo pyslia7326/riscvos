@@ -1,4 +1,4 @@
-use crate::mutex::Mutex;
+use crate::mutex::Lock;
 use crate::mutex::SpinLock;
 use core::ptr;
 

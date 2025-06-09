@@ -1,4 +1,4 @@
-use crate::mutex::Mutex;
+use crate::mutex::Lock;
 use crate::mutex::YieldLock;
 
 const HEAP_SIZE: usize = 8 * 1024;
