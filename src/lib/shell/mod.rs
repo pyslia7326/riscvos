@@ -6,7 +6,7 @@ use core::ptr::copy_nonoverlapping;
 
 pub fn shell(_argc: u64, _argv: &[&str]) {
     let buffer = [0u8; 128];
-    let mut list = LinkedList::<i32>::new();
+    let list = LinkedList::<i32>::new();
     sys_write("====================\n");
     let explain = "List commands:\n\
         p   print all\n\
@@ -23,19 +23,15 @@ pub fn shell(_argc: u64, _argv: &[&str]) {
                 Ok(s) => {
                     let mut tokens = s.trim().split(' ');
                     let cmd = tokens.next().unwrap_or("");
-                    if list.is_none() {
-                        sys_sleep(100);
-                        continue;
-                    }
-                    let listm = list.as_mut().unwrap();
+
                     let mut func = None;
                     match cmd {
                         "echo" => {
                             func = Some(echo);
                         }
                         "p" => {
-                            for &val in listm.iter().unwrap() {
-                                sys_write_u64(val as u64);
+                            for val in list.iter().unwrap() {
+                                sys_write_u64(val.get_ref().lock().value.unwrap() as u64);
                                 sys_write(" ");
                             }
                         }
@@ -43,7 +39,7 @@ pub fn shell(_argc: u64, _argv: &[&str]) {
                             let cmd2 = tokens.next().unwrap_or("");
                             match cmd2.parse::<i32>() {
                                 Ok(value) => {
-                                    if listm.push_front(value).is_none() {
+                                    if list.push_front(value).is_none() {
                                         sys_write("push_front failed");
                                     } else {
                                         sys_write_u64(value as u64)
@@ -56,7 +52,7 @@ pub fn shell(_argc: u64, _argv: &[&str]) {
                             let cmd2 = tokens.next().unwrap_or("");
                             match cmd2.parse::<i32>() {
                                 Ok(value) => {
-                                    if listm.push_back(value).is_none() {
+                                    if list.push_back(value).is_none() {
                                         sys_write("push_back failed");
                                     } else {
                                         sys_write_u64(value as u64)
@@ -65,12 +61,12 @@ pub fn shell(_argc: u64, _argv: &[&str]) {
                                 Err(_) => sys_write("push_back: not a valid value"),
                             }
                         }
-                        "ph" => match listm.pop_front() {
-                            Some(v) => sys_write_u64(v as u64),
+                        "ph" => match list.pop_front() {
+                            Some(v) => sys_write_u64(v.get_ref().lock().value.unwrap() as u64),
                             None => sys_write("pop_front: list empty"),
                         },
-                        "pt" => match listm.pop_back() {
-                            Some(v) => sys_write_u64(v as u64),
+                        "pt" => match list.pop_back() {
+                            Some(v) => sys_write_u64(v.get_ref().lock().value.unwrap() as u64),
                             None => sys_write("pop_back: list empty"),
                         },
                         "help" => sys_write(explain),
