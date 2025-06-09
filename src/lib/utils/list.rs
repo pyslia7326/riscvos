@@ -67,13 +67,45 @@ impl<T> LinkedList<T> {
         Arc::ptr_eq(head_arc, next_arc)
     }
 
-    pub fn push_back(&self, value: T) -> Option<Arc<Mutex<ListNode<T>, YieldLock>>> {
+    pub fn push_back_node(
+        &self,
+        node_arc: Arc<Mutex<ListNode<T>, YieldLock>>,
+    ) -> Option<Arc<Mutex<ListNode<T>, YieldLock>>> {
         let next_arc = self.head.as_ref()?;
         let prev_arc = {
             let next_guard = next_arc.get_ref().lock();
             next_guard.prev.as_ref()?.clone()
         };
+        {
+            let mut node_guard = node_arc.get_ref().lock();
+            node_guard.prev = Some(prev_arc.clone());
+            node_guard.next = Some(next_arc.clone());
+        }
+        {
+            let mut prev_guard = prev_arc.get_ref().lock();
+            prev_guard.next = Some(node_arc.clone());
+        }
+        {
+            let mut next_guard = next_arc.get_ref().lock();
+            next_guard.prev = Some(node_arc.clone());
+        }
+        Some(node_arc)
+    }
+
+    pub fn push_back(&self, value: T) -> Option<Arc<Mutex<ListNode<T>, YieldLock>>> {
         let node_arc = ListNode::new(Some(value))?;
+        self.push_back_node(node_arc)
+    }
+
+    pub fn push_front_node(
+        &self,
+        node_arc: Arc<Mutex<ListNode<T>, YieldLock>>,
+    ) -> Option<Arc<Mutex<ListNode<T>, YieldLock>>> {
+        let prev_arc = self.head.as_ref()?;
+        let next_arc = {
+            let prev_guard = prev_arc.get_ref().lock();
+            prev_guard.next.as_ref()?.clone()
+        };
         {
             let mut node_guard = node_arc.get_ref().lock();
             node_guard.prev = Some(prev_arc.clone());
@@ -91,26 +123,8 @@ impl<T> LinkedList<T> {
     }
 
     pub fn push_front(&self, value: T) -> Option<Arc<Mutex<ListNode<T>, YieldLock>>> {
-        let prev_arc = self.head.as_ref()?;
-        let next_arc = {
-            let prev_guard = prev_arc.get_ref().lock();
-            prev_guard.next.as_ref()?.clone()
-        };
         let node_arc = ListNode::new(Some(value))?;
-        {
-            let mut node_guard = node_arc.get_ref().lock();
-            node_guard.prev = Some(prev_arc.clone());
-            node_guard.next = Some(next_arc.clone());
-        }
-        {
-            let mut prev_guard = prev_arc.get_ref().lock();
-            prev_guard.next = Some(node_arc.clone());
-        }
-        {
-            let mut next_guard = next_arc.get_ref().lock();
-            next_guard.prev = Some(node_arc.clone());
-        }
-        Some(node_arc)
+        self.push_front_node(node_arc)
     }
 
     pub fn remove_node_safe(
