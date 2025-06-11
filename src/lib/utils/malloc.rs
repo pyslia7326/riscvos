@@ -1,7 +1,7 @@
 use crate::mutex::Lock;
 use crate::mutex::YieldLock;
 
-const HEAP_SIZE: usize = 8 * 1024;
+const HEAP_SIZE: usize = 32 * 1024;
 static HEAP: [u8; HEAP_SIZE] = [0; HEAP_SIZE];
 static mut PROGRAM_BREAK: usize = 0;
 static HEAP_LOCK: YieldLock = YieldLock::new();

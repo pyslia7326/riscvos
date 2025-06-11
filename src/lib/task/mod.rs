@@ -3,7 +3,7 @@ use core::mem::offset_of;
 pub mod scheduler;
 pub mod test_task;
 
-const MAX_TASK_NUM: usize = 12;
+const MAX_TASK_NUM: usize = 2;
 const USER_STACK_SIZE: usize = 4096;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
