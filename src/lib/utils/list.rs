@@ -54,6 +54,10 @@ impl<T> LinkedList<T> {
         Self { head }
     }
 
+    pub fn empty_node(&self) -> Option<Arc<Mutex<ListNode<T>, YieldLock>>> {
+        ListNode::new(None)
+    }
+
     pub fn is_empty(&self) -> bool {
         let head_arc = self
             .head
