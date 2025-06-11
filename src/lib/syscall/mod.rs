@@ -3,6 +3,7 @@ use crate::task::{TaskState, TaskStruct};
 use crate::timer::get_current_tick;
 use crate::uart::{uart_read, uart_write};
 use crate::utils::cstr::u64_to_str;
+use crate::utils::malloc;
 
 #[derive(Clone, Copy)]
 #[repr(u64)]
@@ -13,6 +14,8 @@ pub enum Syscall {
     Write = 3,
     Read = 4,
     Wait = 5,
+    Spawn = 6,
+    Alloc = 7,
     Unknown,
 }
 
@@ -29,6 +32,8 @@ impl Syscall {
             3 => Syscall::Write,
             4 => Syscall::Read,
             5 => Syscall::Wait,
+            6 => Syscall::Spawn,
+            7 => Syscall::Alloc,
             _ => Syscall::Unknown,
         }
     }
@@ -73,6 +78,20 @@ pub fn syscall_handler(task: &mut TaskStruct) {
             if get_task_state(wait_id as usize) == TaskState::None {
                 task.xepc += 4;
             }
+        }
+        Syscall::Spawn => {
+            task.state = TaskState::Ready;
+            task.xepc += 4;
+            let task_ptr = task.a[0] as *const u8;
+            let args = task.a[1] as *const u8;
+            let len = task.a[2] as usize;
+            task.a[0] = scheduler::task_create(task_ptr, args, len).unwrap_or(0);
+        }
+        Syscall::Alloc => {
+            task.state = TaskState::Ready;
+            task.xepc += 4;
+            let nbytes = task.a[0] as usize;
+            task.a[0] = unsafe { malloc::malloc(nbytes).unwrap_or(core::ptr::null_mut()) as u64 };
         }
         Syscall::Unknown => panic!("Unknown syscall code: {}", task.a[7]),
     }
@@ -173,5 +192,45 @@ pub fn sys_wait(pid: usize) {
             syscall_code = in(reg) Syscall::Wait.code(),
             pid = in(reg) pid,
         );
+    }
+}
+
+pub fn sys_spawn(task: fn(argc: u64, argv: &[&str]), args: *const u8, len: usize) -> Option<u64> {
+    let mut id;
+    unsafe {
+        core::arch::asm!(
+            "mv a7, {syscall_code}",
+            "mv a0, {task}",
+            "mv a1, {args}",
+            "mv a2, {len}",
+            "ecall",
+            "mv {id}, a0",
+            syscall_code = in(reg) Syscall::Spawn.code(),
+            task = in(reg) task,
+            args = in(reg) args,
+            len = in(reg) len,
+            id = out(reg) id,
+        );
+    }
+    if id == 0 { None } else { Some(id) }
+}
+
+pub fn sys_alloc(nbytes: usize) -> Option<*mut u8> {
+    let mut ptr: u64;
+    unsafe {
+        core::arch::asm!(
+            "mv a7, {syscall_code}",
+            "mv a0, {nbytes}",
+            "ecall",
+            "mv {ptr}, a0",
+            syscall_code = in(reg) Syscall::Alloc.code(),
+            nbytes = in(reg) nbytes,
+            ptr = out(reg) ptr,
+        );
+    }
+    if ptr == (core::ptr::null_mut::<u8>() as u64) {
+        None
+    } else {
+        Some(ptr as *mut u8)
     }
 }
