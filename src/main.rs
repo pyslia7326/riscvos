@@ -67,7 +67,18 @@ fn kernel() -> ! {
 }
 
 #[panic_handler]
-fn panic(_panic: &PanicInfo<'_>) -> ! {
+fn panic(info: &PanicInfo<'_>) -> ! {
+    lib::uart::print_string("panic\n");
+    if let Some(location) = info.location() {
+        lib::uart::print_string(location.file());
+        lib::uart::print_char('\n');
+        lib::uart::print_integerln(location.line() as u64);
+        lib::uart::print_char('\n');
+    }
+    if let Some(message) = info.message().as_str() {
+        lib::uart::print_string(message);
+        lib::uart::print_char('\n');
+    }
     // Infinite loop on panic
     loop {}
 }
