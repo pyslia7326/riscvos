@@ -1,59 +1,117 @@
+use core::cell::UnsafeCell;
+
 use crate::csr;
 use crate::riscv::PrivilegeMode;
 use crate::syscall::sys_exit;
-use crate::task::MAX_TASK_NUM;
 use crate::task::Stack;
 use crate::task::TaskState;
 use crate::task::TaskStruct;
 use crate::task::USER_STACK_SIZE;
 use crate::timer::get_current_tick;
-
-static mut TASKS: [TaskStruct; MAX_TASK_NUM] = [TaskStruct::new(); MAX_TASK_NUM];
-static mut TASK_STACKS: [Stack; MAX_TASK_NUM] = [Stack::new(); MAX_TASK_NUM];
-static mut IDLE_TASK: [TaskStruct; 1] = [TaskStruct::new(); 1];
-static mut IDLE_STACK: [Stack; 1] = [Stack::new(); 1];
-static mut KERNEL_TASK: [TaskStruct; 1] = [TaskStruct::new(); 1];
-static mut CURRENT_TASK: usize = 0;
+use crate::uart::print_string;
+use crate::utils::list::LinkedList;
+use crate::utils::rc::Arc;
 
 pub type RawTaskFn = fn(argc: u64, argv: &[&str]);
+pub static SCHEDULER: SafeStaticScheduler = SafeStaticScheduler {
+    inner: UnsafeCell::new(Scheduler::new()),
+};
 
-pub fn get_kernel_task_struct() -> &'static mut TaskStruct {
-    unsafe {
-        let task_struct = &mut KERNEL_TASK[0];
-        task_struct
+macro_rules! allign_stack_ptr_16 {
+    ($task_struct: expr) => {
+        unsafe {
+            const ALIGNMENT: u64 = 16;
+            match ($task_struct).stack_ptr.as_ref() {
+                Some(s) => {
+                    let stack_ptr = s.get_ref().stack;
+                    let stack_size = s.get_ref().size;
+                    let stack_bottom = stack_ptr.as_ptr();
+                    let stack_top = stack_bottom.add(stack_size).sub(ALIGNMENT as usize) as u64;
+                    let remainder = stack_top & 0xf;
+                    let padding = if remainder == 0 {
+                        0
+                    } else {
+                        ALIGNMENT - remainder
+                    };
+                    Some((stack_top + padding) as u64)
+                }
+                None => None,
+            }
+        }
+    };
+}
+
+pub struct Scheduler {
+    pub running_list: Option<LinkedList<TaskStruct>>,
+    pub waiting_list: Option<LinkedList<TaskStruct>>,
+    pub blocked_list: Option<LinkedList<TaskStruct>>,
+    pub pool: Option<LinkedList<TaskStruct>>,
+    pub kernel_task: Option<TaskStruct>,
+    pub idle_task: Option<TaskStruct>,
+    pub new_task_id: u64,
+}
+
+pub struct SafeStaticScheduler {
+    pub inner: UnsafeCell<Scheduler>,
+}
+
+unsafe impl Sync for SafeStaticScheduler {}
+
+impl Scheduler {
+    pub const fn new() -> Self {
+        Self {
+            running_list: None,
+            waiting_list: None,
+            blocked_list: None,
+            pool: None,
+            kernel_task: None,
+            idle_task: None,
+            new_task_id: 1,
+        }
     }
 }
 
-pub fn get_current_task() -> usize {
-    unsafe { CURRENT_TASK }
-}
-
-pub fn set_current_task(id: usize) {
-    unsafe {
-        CURRENT_TASK = id;
+fn idle_task() {
+    loop {
+        crate::wfi!();
     }
 }
 
-pub fn get_stack_ptr(id: usize) -> *mut u8 {
-    unsafe {
-        let stack = TASK_STACKS[id].stack.as_mut_ptr();
-        let stack_top = stack.add(USER_STACK_SIZE).sub(8);
-        stack_top
+pub fn init() {
+    let scheduler = unsafe { &mut *SCHEDULER.inner.get() };
+    scheduler.running_list = Some(LinkedList::new());
+    scheduler.waiting_list = Some(LinkedList::new());
+    scheduler.blocked_list = Some(LinkedList::new());
+    scheduler.pool = Some(LinkedList::new());
+    // create kernel task struct
+    csr::write_mscratch(
+        scheduler.kernel_task.get_or_insert(TaskStruct::new()) as *const TaskStruct as u64,
+    );
+    // create idle task stack
+    let mut idle_task_stack = match Stack::new(USER_STACK_SIZE) {
+        Some(s) => Arc::new(s),
+        None => {
+            print_string("Scheduler init: create idle task stack failed\n");
+            return;
+        }
+    };
+    let idle_task_struct = scheduler.idle_task.get_or_insert(TaskStruct::new());
+    idle_task_struct.stack_ptr = idle_task_stack.take();
+    if let Some(sp) = allign_stack_ptr_16!(idle_task_struct) {
+        idle_task_struct.sp = sp;
+    } else {
+        print_string("Scheduler init: allign idle task sp failed\n");
+        return;
     }
+    idle_task_struct.xepc = idle_task as u64;
+    csr::write_sepc(idle_task_struct.xepc);
+    csr::write_sscratch(idle_task_struct as *const TaskStruct as u64);
+    idle_task_struct.xepc = idle_task as u64;
+    scheduler.new_task_id = 1;
+    print_string("Scheduler init success\n");
 }
 
-pub fn get_task_struct(id: usize) -> &'static mut TaskStruct {
-    unsafe {
-        let task_struct = &mut TASKS[id];
-        task_struct
-    }
-}
-
-pub fn get_task_state(id: usize) -> TaskState {
-    unsafe { TASKS[id].state }
-}
-
-fn task_start(task: RawTaskFn, args: *const u8, len: usize) {
+pub fn task_start(task: RawTaskFn, args: *const u8, len: usize) {
     use core::slice;
     use core::str;
     if args.is_null() && len > 0 {
@@ -80,86 +138,171 @@ fn task_start(task: RawTaskFn, args: *const u8, len: usize) {
     sys_exit(0);
 }
 
-pub fn task_create(task: RawTaskFn, args: *const u8, len: usize) -> Option<&'static TaskStruct> {
-    for i in 0..MAX_TASK_NUM {
-        let task_struct = get_task_struct(i);
-        if task_struct.state == TaskState::None {
-            task_struct.state = TaskState::Ready;
-            task_struct.id = Some(i as u64);
-            task_struct.stack_ptr = get_stack_ptr(i);
-            task_struct.sp = get_stack_ptr(i) as u64;
-            task_struct.xepc = task_start as u64;
-            task_struct.a[0] = task as u64;
-            task_struct.a[1] = args as u64;
-            task_struct.a[2] = len as u64;
-            return Some(task_struct);
+pub fn task_create(task: *const u8, args: *const u8, len: usize) -> Option<u64> {
+    let scheduler = unsafe { &mut *SCHEDULER.inner.get() };
+    let pool = match scheduler.pool.as_mut() {
+        Some(list) => list,
+        None => return None,
+    };
+    let running = match scheduler.running_list.as_mut() {
+        Some(list) => list,
+        None => return None,
+    };
+    let new_task = if pool.is_empty() {
+        let new_task_stack = match Stack::new(USER_STACK_SIZE) {
+            Some(s) => Arc::new(s),
+            None => return None,
+        };
+        if new_task_stack.is_none() {
+            return None;
+        }
+        let new_task_node = match pool.empty_node() {
+            Some(n) => n,
+            None => return None,
+        };
+        {
+            let mut node_guard = new_task_node.get_ref().lock();
+            let task_struct = node_guard.value.get_or_insert_with(|| TaskStruct::new());
+            task_struct.stack_ptr = new_task_stack;
+        }
+        new_task_node
+    } else {
+        match pool.pop_front() {
+            Some(n) => n,
+            None => return None,
+        }
+    };
+    let id = {
+        let mut new_task_guard = new_task.get_ref().lock();
+        let new_task_struct = match new_task_guard.value.as_mut() {
+            Some(t) => t,
+            None => return None,
+        };
+        new_task_struct.state = TaskState::Ready;
+        new_task_struct.id = Some(scheduler.new_task_id);
+        scheduler.new_task_id += 1;
+        if let Some(sp) = allign_stack_ptr_16!(new_task_struct) {
+            new_task_struct.sp = sp;
+        } else {
+            return None;
+        }
+        new_task_struct.xepc = task_start as u64;
+        new_task_struct.a[0] = task as u64;
+        new_task_struct.a[1] = args as u64;
+        new_task_struct.a[2] = len as u64;
+        new_task_struct.id
+    };
+    running.push_back_node(new_task);
+    id
+}
+
+pub fn schedule() {
+    let scheduler = unsafe { &mut *SCHEDULER.inner.get() };
+    let blocked = match scheduler.blocked_list.as_mut() {
+        Some(p) => p,
+        None => return,
+    };
+    let running = match scheduler.running_list.as_mut() {
+        Some(p) => p,
+        None => return,
+    };
+    let pool = match scheduler.pool.as_mut() {
+        Some(p) => p,
+        None => return,
+    };
+    for b in blocked.iter_safe().unwrap() {
+        let is_ready = {
+            let mut guard = b.get_ref().lock();
+            let btask = match guard.value.as_mut() {
+                Some(t) => t,
+                None => continue,
+            };
+            if let Some(sleep_until) = btask.sleep_until {
+                if get_current_tick() >= sleep_until {
+                    btask.state = TaskState::Ready;
+                    btask.sleep_until = None;
+                }
+            }
+            btask.state == TaskState::Ready
+        };
+        if is_ready {
+            match LinkedList::remove_node_safe(b) {
+                Some(n) => running.push_back_node(n),
+                None => continue,
+            };
         }
     }
-    None
-}
-
-fn idle_task() {
-    // print_string("Idle task is running!\n");
-    // crate::ecall!();
-    loop {
-        crate::wfi!();
+    for r in running.iter_safe().unwrap() {
+        let (xepc, struct_ptr, state) = {
+            let mut guard = r.get_ref().lock();
+            let rtask = match guard.value.as_mut() {
+                Some(t) => t,
+                None => continue,
+            };
+            match rtask.state {
+                TaskState::Ready => rtask.state = TaskState::Running,
+                TaskState::Sleeping => rtask.state = TaskState::Sleeping,
+                _ => rtask.state = TaskState::None,
+            }
+            (rtask.xepc, rtask as *const TaskStruct as u64, rtask.state)
+        };
+        let task = match LinkedList::remove_node_safe(r) {
+            Some(n) => n,
+            None => continue,
+        };
+        match state {
+            TaskState::Running => {
+                csr::write_sepc(xepc);
+                csr::write_sscratch(struct_ptr);
+                csr::sstatus_set_pp(PrivilegeMode::User);
+                running.push_back_node(task);
+                return;
+            }
+            TaskState::Sleeping => {
+                blocked.push_back_node(task);
+            }
+            _ => {
+                pool.push_back_node(task);
+            }
+        };
     }
+    csr::write_sepc(scheduler.idle_task.as_ref().unwrap().xepc);
+    csr::write_sscratch(scheduler.idle_task.as_ref().unwrap() as *const TaskStruct as u64);
+    csr::sstatus_set_pp(PrivilegeMode::Supervisor);
 }
 
-pub fn get_idle_stack_ptr() -> *mut u8 {
-    unsafe {
-        let stack = IDLE_STACK[0].stack.as_mut_ptr();
-        let stack_top = stack.add(USER_STACK_SIZE).sub(8);
-        stack_top
-    }
-}
-
-pub fn get_idle_task_struct() -> &'static mut TaskStruct {
-    unsafe {
-        let task_struct = &mut IDLE_TASK[0];
-        task_struct
-    }
-}
-
-pub fn create_idle_task() -> Option<&'static TaskStruct> {
-    let task_struct = get_idle_task_struct();
-    task_struct.state = TaskState::Ready;
-    task_struct.stack_ptr = get_idle_stack_ptr();
-    task_struct.sp = get_idle_stack_ptr() as u64;
-    task_struct.xepc = idle_task as u64;
-    Some(task_struct)
-}
-
-pub fn scheduler() -> &'static TaskStruct {
-    let current_id = get_current_task();
-
-    // wake up task first
-    for i in 0..MAX_TASK_NUM {
-        let task_id = (current_id + i + 1) % MAX_TASK_NUM;
-        let task = get_task_struct(task_id);
-        if task.state == TaskState::Sleeping {
-            if let Some(sleep_until) = task.sleep_until {
-                if get_current_tick() >= sleep_until {
-                    task.state = TaskState::Ready;
-                    task.sleep_until = None;
+pub fn get_task_state(id: u64) -> TaskState {
+    let scheduler = unsafe { &mut *SCHEDULER.inner.get() };
+    let blocked = scheduler.blocked_list.as_mut();
+    let running = scheduler.running_list.as_mut();
+    if let Some(blist) = blocked {
+        if let Some(iter) = blist.iter() {
+            for task in iter {
+                let guard = task.get_ref().lock();
+                if let Some(t) = guard.value.as_ref() {
+                    if let Some(tid) = t.id {
+                        if tid == id {
+                            // return t.state;
+                            return TaskState::Sleeping;
+                        }
+                    }
                 }
             }
         }
     }
-
-    for i in 0..MAX_TASK_NUM {
-        let next_id = (current_id + i + 1) % MAX_TASK_NUM;
-        let next_task = get_task_struct(next_id);
-        if next_task.state == TaskState::Ready {
-            set_current_task(next_id);
-            next_task.state = TaskState::Running;
-            csr::write_sscratch(next_task as *const TaskStruct as u64);
-            csr::sstatus_set_pp(PrivilegeMode::User);
-            return next_task;
+    if let Some(rlist) = running {
+        if let Some(iter) = rlist.iter() {
+            for task in iter {
+                let guard = task.get_ref().lock();
+                if let Some(t) = guard.value.as_ref() {
+                    if let Some(tid) = t.id {
+                        if tid == id {
+                            return t.state;
+                        }
+                    }
+                }
+            }
         }
     }
-    let idle_task = get_idle_task_struct();
-    csr::sstatus_set_pp(PrivilegeMode::Supervisor);
-    csr::write_sscratch(idle_task as *const TaskStruct as u64);
-    idle_task
+    TaskState::None
 }

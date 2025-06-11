@@ -1,4 +1,4 @@
-use crate::task::scheduler::get_task_state;
+use crate::task::scheduler;
 use crate::task::{TaskState, TaskStruct};
 use crate::timer::get_current_tick;
 use crate::uart::{uart_read, uart_write};
@@ -75,7 +75,7 @@ pub fn syscall_handler(task: &mut TaskStruct) {
         Syscall::Wait => {
             task.state = TaskState::Ready;
             let wait_id = task.a[0];
-            if get_task_state(wait_id as usize) == TaskState::None {
+            if scheduler::get_task_state(wait_id) == TaskState::None {
                 task.xepc += 4;
             }
         }

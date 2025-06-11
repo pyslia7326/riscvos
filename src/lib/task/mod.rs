@@ -1,9 +1,11 @@
-use core::mem::offset_of;
+use core::{mem::offset_of, ptr::NonNull};
+
+use crate::utils::malloc::{free, malloc};
+use crate::utils::rc::Arc;
 
 pub mod scheduler;
 pub mod test_task;
 
-const MAX_TASK_NUM: usize = 2;
 const USER_STACK_SIZE: usize = 4096;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -15,16 +17,16 @@ pub enum TaskState {
     Blocked,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct Stack {
-    pub stack: [u8; crate::task::USER_STACK_SIZE as usize],
+    pub stack: NonNull<u8>,
+    pub size: usize,
 }
 
-#[derive(Clone, Copy)]
 pub struct TaskStruct {
     pub id: Option<u64>,
     pub state: TaskState,
-    pub stack_ptr: *mut u8,
+    pub stack_ptr: Option<Arc<Stack>>,
     pub sleep_until: Option<u64>,
     pub xepc: u64,
     pub xcause: u64,
@@ -79,19 +81,30 @@ pub const OFFSET_A6: usize = OFFSET_A + 6 * 8;
 pub const OFFSET_A7: usize = OFFSET_A + 7 * 8;
 
 impl Stack {
-    pub const fn new() -> Self {
-        Stack {
-            stack: [0; crate::task::USER_STACK_SIZE],
+    pub fn new(nbytes: usize) -> Option<Self> {
+        unsafe {
+            Some(Self {
+                stack: NonNull::new(malloc(nbytes)?)?,
+                size: nbytes,
+            })
+        }
+    }
+}
+
+impl Drop for Stack {
+    fn drop(&mut self) {
+        unsafe {
+            free(self.stack.as_ptr());
         }
     }
 }
 
 impl TaskStruct {
     pub const fn new() -> Self {
-        TaskStruct {
+        Self {
             id: None,
             state: TaskState::None,
-            stack_ptr: core::ptr::null_mut(),
+            stack_ptr: None,
             sleep_until: None,
             xepc: 0,
             xcause: 0,

@@ -8,8 +8,6 @@ use lib::csr;
 use lib::plic::plic_init;
 use lib::riscv::PrivilegeMode;
 use lib::shell;
-use lib::task;
-use lib::task::scheduler;
 use lib::timer::timer_init;
 use lib::trap::kernel_trap::kernel_trap;
 use lib::trap::user_trap::user_trap;
@@ -31,12 +29,14 @@ fn main() -> ! {
     // - Bit 7: L=0 (Not locked, can be modified)
     // Alignment: NA4 means the region is aligned to a 4-byte boundary.
 
+    lib::task::scheduler::init();
+
     csr::write_mtvec(kernel_trap as u64);
     csr::write_mideleg(lib::trap::interrupt::ENABLE_ALL_INTERRUPTS);
     csr::write_medeleg(lib::trap::exception::ENABLE_ALL_EXCEPTIONS);
 
-    let kernel_task_struct = scheduler::get_kernel_task_struct();
-    csr::write_mscratch(kernel_task_struct as *const task::TaskStruct as u64);
+    // let kernel_task_struct = scheduler::get_kernel_task_struct();
+    // csr::write_mscratch(kernel_task_struct as *const task::TaskStruct as u64);
     csr::mstatus_set_pp(PrivilegeMode::Supervisor);
     csr::write_mepc(kernel as u64);
     timer_init();
@@ -47,13 +47,9 @@ fn main() -> ! {
 
 #[unsafe(no_mangle)]
 fn kernel() -> ! {
-    scheduler::task_create(shell::shell, "".as_ptr(), 0);
-    scheduler::create_idle_task();
+    lib::task::scheduler::task_create(shell::shell as *const u8, "".as_ptr(), 0);
 
     csr::write_stvec(user_trap as u64);
-    let idle_task_struct = lib::task::scheduler::get_idle_task_struct();
-    csr::write_sepc(idle_task_struct.xepc);
-    csr::write_sscratch(idle_task_struct as *const lib::task::TaskStruct as u64);
     csr::sstatus_set_pp(PrivilegeMode::Supervisor);
 
     csr::write_sstatus(csr::read_sstatus() | (1 << csr::SSTATUS_SPIE)); // Enable S-mode interrupts after sret (switch to idle_task)
