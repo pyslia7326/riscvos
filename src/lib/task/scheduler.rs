@@ -17,7 +17,7 @@ pub static SCHEDULER: SafeStaticScheduler = SafeStaticScheduler {
     inner: UnsafeCell::new(Scheduler::new()),
 };
 
-macro_rules! allign_stack_ptr_16 {
+macro_rules! align_stack_ptr_16 {
     ($task_struct: expr) => {
         unsafe {
             const ALIGNMENT: u64 = 16;
@@ -97,7 +97,7 @@ pub fn init() {
     };
     let idle_task_struct = scheduler.idle_task.get_or_insert(TaskStruct::new());
     idle_task_struct.stack_ptr = idle_task_stack.take();
-    if let Some(sp) = allign_stack_ptr_16!(idle_task_struct) {
+    if let Some(sp) = align_stack_ptr_16!(idle_task_struct) {
         idle_task_struct.sp = sp;
     } else {
         print_string("Scheduler init: allign idle task sp failed\n");
@@ -153,9 +153,6 @@ pub fn task_create(task: *const u8, args: *const u8, len: usize) -> Option<u64> 
             Some(s) => Arc::new(s),
             None => return None,
         };
-        if new_task_stack.is_none() {
-            return None;
-        }
         let new_task_node = match pool.empty_node() {
             Some(n) => n,
             None => return None,
@@ -181,7 +178,7 @@ pub fn task_create(task: *const u8, args: *const u8, len: usize) -> Option<u64> 
         new_task_struct.state = TaskState::Ready;
         new_task_struct.id = Some(scheduler.new_task_id);
         scheduler.new_task_id += 1;
-        if let Some(sp) = allign_stack_ptr_16!(new_task_struct) {
+        if let Some(sp) = align_stack_ptr_16!(new_task_struct) {
             new_task_struct.sp = sp;
         } else {
             return None;
@@ -198,17 +195,33 @@ pub fn task_create(task: *const u8, args: *const u8, len: usize) -> Option<u64> 
 
 pub fn schedule() {
     let scheduler = unsafe { &mut *SCHEDULER.inner.get() };
+    let running_is_empty = {
+        let running = match scheduler.running_list.as_mut() {
+            Some(p) => p,
+            None => panic!("Scheduler list should not be None\n"),
+        };
+        running.is_empty()
+    };
+    if running_is_empty {
+        let mut tmp = scheduler.running_list.take();
+        scheduler.running_list = scheduler.waiting_list.take();
+        scheduler.waiting_list = tmp.take();
+    }
     let blocked = match scheduler.blocked_list.as_mut() {
         Some(p) => p,
-        None => return,
+        None => panic!("Scheduler list should not be None\n"),
     };
     let running = match scheduler.running_list.as_mut() {
         Some(p) => p,
-        None => return,
+        None => panic!("Scheduler list should not be None\n"),
+    };
+    let waiting = match scheduler.waiting_list.as_mut() {
+        Some(p) => p,
+        None => panic!("Scheduler list should not be None\n"),
     };
     let pool = match scheduler.pool.as_mut() {
         Some(p) => p,
-        None => return,
+        None => panic!("Scheduler list should not be None\n"),
     };
     for b in blocked.iter_safe().unwrap() {
         let is_ready = {
@@ -240,7 +253,8 @@ pub fn schedule() {
                 None => continue,
             };
             match rtask.state {
-                TaskState::Ready => rtask.state = TaskState::Running,
+                TaskState::Ready => rtask.state = TaskState::Ready,
+                TaskState::Running => rtask.state = TaskState::Ready,
                 TaskState::Sleeping => rtask.state = TaskState::Sleeping,
                 _ => rtask.state = TaskState::None,
             }
@@ -251,11 +265,11 @@ pub fn schedule() {
             None => continue,
         };
         match state {
-            TaskState::Running => {
+            TaskState::Ready | TaskState::Running => {
                 csr::write_sepc(xepc);
                 csr::write_sscratch(struct_ptr);
                 csr::sstatus_set_pp(PrivilegeMode::User);
-                running.push_back_node(task);
+                waiting.push_back_node(task);
                 return;
             }
             TaskState::Sleeping => {
@@ -266,6 +280,7 @@ pub fn schedule() {
             }
         };
     }
+    // if no task, switch to idle task.
     csr::write_sepc(scheduler.idle_task.as_ref().unwrap().xepc);
     csr::write_sscratch(scheduler.idle_task.as_ref().unwrap() as *const TaskStruct as u64);
     csr::sstatus_set_pp(PrivilegeMode::Supervisor);
@@ -274,6 +289,7 @@ pub fn schedule() {
 pub fn get_task_state(id: u64) -> TaskState {
     let scheduler = unsafe { &mut *SCHEDULER.inner.get() };
     let blocked = scheduler.blocked_list.as_mut();
+    let waiting = scheduler.waiting_list.as_mut();
     let running = scheduler.running_list.as_mut();
     if let Some(blist) = blocked {
         if let Some(iter) = blist.iter() {
@@ -284,6 +300,20 @@ pub fn get_task_state(id: u64) -> TaskState {
                         if tid == id {
                             // return t.state;
                             return TaskState::Sleeping;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if let Some(wlist) = waiting {
+        if let Some(iter) = wlist.iter() {
+            for task in iter {
+                let guard = task.get_ref().lock();
+                if let Some(t) = guard.value.as_ref() {
+                    if let Some(tid) = t.id {
+                        if tid == id {
+                            return t.state;
                         }
                     }
                 }
