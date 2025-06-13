@@ -132,6 +132,8 @@ pub fn sys_sleep(ticks: u64) {
 }
 
 pub fn sys_write(s: &str) {
+    let ptr = core::hint::black_box(s.as_ptr());
+    let len = core::hint::black_box(s.len());
     unsafe {
         core::arch::asm!(
             "mv a7, {syscall_code}",
@@ -139,8 +141,8 @@ pub fn sys_write(s: &str) {
             "mv a1, {len}",
             "ecall",
             syscall_code = in(reg) Syscall::Write.code(),
-            ptr = in(reg) s.as_ptr(),
-            len = in(reg) s.len(),
+            ptr = in(reg) ptr,
+            len = in(reg) len,
         );
     }
 }
@@ -149,14 +151,16 @@ pub fn sys_write_u64(num: u64) {
     let mut buffer = [0; 20];
     match u64_to_str(num, &mut buffer) {
         Ok(num) => unsafe {
+            let ptr = core::hint::black_box(num.as_ptr());
+            let len = core::hint::black_box(num.len());
             core::arch::asm!(
                 "mv a7, {syscall_code}",
                 "mv a0, {ptr}",
                 "mv a1, {len}",
                 "ecall",
                 syscall_code = in(reg) Syscall::Write.code(),
-                ptr = in(reg) num.as_ptr(),
-                len = in(reg) num.len(),
+                ptr = in(reg) ptr,
+                len = in(reg) len,
             );
         },
         Err(_) => {
@@ -167,6 +171,8 @@ pub fn sys_write_u64(num: u64) {
 
 pub fn sys_read(buf: &[u8]) -> Option<u64> {
     let mut read_len: u64;
+    let ptr = core::hint::black_box(buf.as_ptr());
+    let len = core::hint::black_box(buf.len());
     unsafe {
         core::arch::asm!(
             "mv a7, {syscall_code}",
@@ -175,8 +181,8 @@ pub fn sys_read(buf: &[u8]) -> Option<u64> {
             "ecall",
             "mv {read_len}, a0",
             syscall_code = in(reg) Syscall::Read.code(),
-            ptr = in(reg) buf.as_ptr(),
-            len = in(reg) buf.len(),
+            ptr = in(reg) ptr,
+            len = in(reg) len,
             read_len = out(reg) read_len,
         );
     }
