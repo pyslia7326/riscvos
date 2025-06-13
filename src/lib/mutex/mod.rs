@@ -1,7 +1,7 @@
 use crate::syscall::sys_yield;
 use core::cell::UnsafeCell;
 use core::ops::{Deref, DerefMut};
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::sync::atomic::{AtomicU32, Ordering};
 
 /// Lock trait with basic locking interface
 pub trait Lock {
@@ -11,13 +11,13 @@ pub trait Lock {
 
 /// Spin-based lock using busy-wait loop
 pub struct SpinLock {
-    spin_lock: AtomicBool, // true = locked, false = unlocked
+    spin_lock: AtomicU32, // 1 = locked, 0 = unlocked
 }
 
 impl SpinLock {
     pub const fn new() -> Self {
         Self {
-            spin_lock: AtomicBool::new(false),
+            spin_lock: AtomicU32::new(0),
         }
     }
 }
@@ -31,7 +31,7 @@ impl Lock for SpinLock {
         // when the lock is not acquired.
         while self
             .spin_lock
-            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .compare_exchange(0, 1, Ordering::Acquire, Ordering::Relaxed)
             .is_err()
         {
             // Busy-wait spin, do nothing on failure
@@ -42,19 +42,19 @@ impl Lock for SpinLock {
         // Ordering::Release ensures that all previous memory operations
         // are completed before the lock is released. This guarantees that
         // updates to shared data are visible to other threads after the lock is unlocked.
-        self.spin_lock.store(false, Ordering::Release);
+        self.spin_lock.store(0, Ordering::Release);
     }
 }
 
 /// Yielding lock which calls sys_yield() when lock acquisition fails
 pub struct YieldLock {
-    yield_lock: AtomicBool, // true = locked, false = unlocked
+    yield_lock: AtomicU32, // 1 = locked, 0 = unlocked
 }
 
 impl YieldLock {
     pub const fn new() -> Self {
         Self {
-            yield_lock: AtomicBool::new(false),
+            yield_lock: AtomicU32::new(0),
         }
     }
 }
@@ -68,7 +68,7 @@ impl Lock for YieldLock {
         // when the lock is not acquired.
         while self
             .yield_lock
-            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .compare_exchange(0, 1, Ordering::Acquire, Ordering::Relaxed)
             .is_err()
         {
             // Yield the CPU to allow other threads to run
@@ -80,7 +80,7 @@ impl Lock for YieldLock {
         // Ordering::Release ensures that all previous memory operations
         // are completed before the lock is released. This guarantees that
         // updates to shared data are visible to other threads after the lock is unlocked.
-        self.yield_lock.store(false, Ordering::Release);
+        self.yield_lock.store(0, Ordering::Release);
     }
 }
 
