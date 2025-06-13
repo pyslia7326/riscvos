@@ -6,7 +6,7 @@ use crate::syscall::sys_exit;
 use crate::task::Stack;
 use crate::task::TaskState;
 use crate::task::TaskStruct;
-use crate::task::USER_STACK_SIZE;
+use crate::task::{USER_STACK_ALIGNMENT, USER_STACK_SIZE};
 use crate::timer::get_current_tick;
 use crate::uart::print_string;
 use crate::utils::list::LinkedList;
@@ -17,28 +17,17 @@ pub static SCHEDULER: SafeStaticScheduler = SafeStaticScheduler {
     inner: UnsafeCell::new(Scheduler::new()),
 };
 
-macro_rules! align_stack_ptr_16 {
-    ($task_struct: expr) => {
-        unsafe {
-            const ALIGNMENT: u64 = 16;
-            match ($task_struct).stack_ptr.as_ref() {
-                Some(s) => {
-                    let stack_ptr = s.get_ref().stack;
-                    let stack_size = s.get_ref().size;
-                    let stack_bottom = stack_ptr.as_ptr();
-                    let stack_top = stack_bottom.add(stack_size).sub(ALIGNMENT as usize) as u64;
-                    let remainder = stack_top & 0xf;
-                    let padding = if remainder == 0 {
-                        0
-                    } else {
-                        ALIGNMENT - remainder
-                    };
-                    Some((stack_top + padding) as u64)
-                }
-                None => None,
-            }
-        }
+fn align_stack_ptr(s: &Stack) -> usize {
+    // print_integerln(s.stack.as_ptr() as u64);
+    let stack_top = s.stack.as_ptr();
+    let stack_bottom = unsafe { stack_top.add(s.size).sub(USER_STACK_ALIGNMENT) };
+    let remainder = stack_bottom as usize & 0xf;
+    let padding = if remainder == 0 {
+        0
+    } else {
+        USER_STACK_ALIGNMENT - remainder
     };
+    stack_bottom as usize + padding
 }
 
 pub struct Scheduler {
@@ -88,21 +77,16 @@ pub fn init() {
         scheduler.kernel_task.get_or_insert(TaskStruct::new()) as *const TaskStruct as u64,
     );
     // create idle task stack
-    let mut idle_task_stack = match Stack::new(USER_STACK_SIZE) {
-        Some(s) => Arc::new(s),
-        None => {
-            print_string("Scheduler init: create idle task stack failed\n");
-            return;
-        }
+    let idle_task_stack = match crate::task::Stack::new(USER_STACK_SIZE) {
+        Some(s) => match crate::utils::rc::Arc::new(s) {
+            Some(a) => a,
+            _ => panic!(),
+        },
+        _ => panic!(),
     };
     let idle_task_struct = scheduler.idle_task.get_or_insert(TaskStruct::new());
-    idle_task_struct.stack_ptr = idle_task_stack.take();
-    if let Some(sp) = align_stack_ptr_16!(idle_task_struct) {
-        idle_task_struct.sp = sp;
-    } else {
-        print_string("Scheduler init: allign idle task sp failed\n");
-        return;
-    }
+    idle_task_struct.sp = align_stack_ptr(idle_task_stack.get_ref()) as u64;
+    idle_task_struct.stack_ptr = Some(idle_task_stack);
     idle_task_struct.xepc = idle_task as u64;
     csr::write_sepc(idle_task_struct.xepc);
     csr::write_sscratch(idle_task_struct as *const TaskStruct as u64);
@@ -178,11 +162,13 @@ pub fn task_create(task: *const u8, args: *const u8, len: usize) -> Option<u64> 
         new_task_struct.state = TaskState::Ready;
         new_task_struct.id = Some(scheduler.new_task_id);
         scheduler.new_task_id += 1;
-        if let Some(sp) = align_stack_ptr_16!(new_task_struct) {
-            new_task_struct.sp = sp;
-        } else {
-            return None;
-        }
+
+        let stack_ptr = match new_task_struct.stack_ptr.as_ref() {
+            Some(s) => s,
+            None => return None,
+        };
+        let align_sp = align_stack_ptr(stack_ptr.get_ref());
+        new_task_struct.sp = align_sp as u64;
         new_task_struct.xepc = task_start as u64;
         new_task_struct.a[0] = task as u64;
         new_task_struct.a[1] = args as u64;

@@ -6,6 +6,7 @@ use crate::utils::rc::Arc;
 pub mod scheduler;
 pub mod test_task;
 
+const USER_STACK_ALIGNMENT: usize = 16;
 const USER_STACK_SIZE: usize = 4096;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
