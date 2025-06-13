@@ -97,6 +97,7 @@ pub fn syscall_handler(task: &mut TaskStruct) {
     }
 }
 
+#[inline(never)]
 pub fn sys_yield() {
     unsafe {
         core::arch::asm!(
@@ -107,6 +108,7 @@ pub fn sys_yield() {
     }
 }
 
+#[inline(never)]
 pub fn sys_exit(id: u64) {
     unsafe {
         core::arch::asm!(
@@ -119,6 +121,7 @@ pub fn sys_exit(id: u64) {
     }
 }
 
+#[inline(never)]
 pub fn sys_sleep(ticks: u64) {
     unsafe {
         core::arch::asm!(
@@ -131,6 +134,7 @@ pub fn sys_sleep(ticks: u64) {
     }
 }
 
+#[inline(never)]
 pub fn sys_write(s: &str) {
     let ptr = core::hint::black_box(s.as_ptr());
     let len = core::hint::black_box(s.len());
@@ -147,6 +151,7 @@ pub fn sys_write(s: &str) {
     }
 }
 
+#[inline(never)]
 pub fn sys_write_u64(num: u64) {
     let mut buffer = [0; 20];
     match u64_to_str(num, &mut buffer) {
@@ -169,6 +174,7 @@ pub fn sys_write_u64(num: u64) {
     }
 }
 
+#[inline(never)]
 pub fn sys_read(buf: &[u8]) -> Option<u64> {
     let mut read_len: u64;
     let ptr = core::hint::black_box(buf.as_ptr());
@@ -189,6 +195,7 @@ pub fn sys_read(buf: &[u8]) -> Option<u64> {
     if read_len == 0 { None } else { Some(read_len) }
 }
 
+#[inline(never)]
 pub fn sys_wait(pid: usize) {
     unsafe {
         core::arch::asm!(
@@ -201,6 +208,7 @@ pub fn sys_wait(pid: usize) {
     }
 }
 
+#[inline(never)]
 pub fn sys_spawn(task: fn(argc: u64, argv: &[&str]), args: *const u8, len: usize) -> Option<u64> {
     let mut id;
     unsafe {
@@ -221,6 +229,7 @@ pub fn sys_spawn(task: fn(argc: u64, argv: &[&str]), args: *const u8, len: usize
     if id == 0 { None } else { Some(id) }
 }
 
+#[inline(never)]
 pub fn sys_alloc(nbytes: usize) -> Option<*mut u8> {
     let mut ptr: u64;
     unsafe {

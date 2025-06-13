@@ -5,11 +5,13 @@ const HEAP_SIZE: usize = 32 * 1024;
 static HEAP: [u8; HEAP_SIZE] = [0; HEAP_SIZE];
 static mut PROGRAM_BREAK: usize = 0;
 static HEAP_LOCK: YieldLock = YieldLock::new();
-const ALIGNMENT: usize = 8;
+const ALIGNMENT: usize = 16;
 
+#[inline(never)]
 pub unsafe fn malloc(nbytes: usize) -> Option<*mut u8> {
     unsafe {
         HEAP_LOCK.lock();
+        let nbytes = nbytes.max(8);
         let current_program_break_addr = HEAP.as_ptr() as usize + PROGRAM_BREAK;
         let remainder = current_program_break_addr % ALIGNMENT;
         let padding_bytes = if remainder == 0 {
